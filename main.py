@@ -13,9 +13,16 @@ import requests
 
 from __init__ import JarvisAssistant
 import config
+from ai_assistant import JarvisAI
+
+try:
+    from memory import USER_MEMORY
+except Exception:
+    USER_MEMORY = {}
 
 
 obj = JarvisAssistant()
+ai = JarvisAI()
 
 GREETINGS = {
     "hello jarvis",
@@ -76,7 +83,11 @@ def computational_intelligence(question):
 
 def startup_message():
     now = obj.tell_time()
-    return f"{obj.greeting()}. I am Jarvis, online and ready. Current time is {now}."
+    title = USER_MEMORY.get("preferred_title", "sir")
+    goal = USER_MEMORY.get("exam_goal")
+    if goal:
+        return f"{obj.greeting()}, {title}. I am Jarvis, online and ready. Current time is {now}. Your {goal} preparation workspace is ready."
+    return f"{obj.greeting()}, {title}. I am Jarvis, online and ready. Current time is {now}."
 
 
 def process_command(command):
@@ -85,7 +96,9 @@ def process_command(command):
         return "Please enter a command."
 
     if command in GREETINGS:
-        return random.choice(GREETINGS_RES)
+        title = USER_MEMORY.get("preferred_title", "")
+        response = random.choice(GREETINGS_RES)
+        return f"{response} {title}.".strip()
 
     if "date" in command:
         return obj.tell_me_date()
@@ -140,10 +153,25 @@ def process_command(command):
         sender_password = _config_value("email_password")
         if not sender_email or not sender_password:
             return "Email needs your address and app password in config.py."
-        return "Email is configured. Use the voice flow for recipient, subject, and message."
+        match = re.search(r"send email to (.*?) subject (.*?) message (.*)", command, re.IGNORECASE)
+        if not match:
+            return "Email is configured. Type: send email to someone@example.com subject Hello message Your message here."
+        receiver_email, subject, message = [part.strip() for part in match.groups()]
+        if not receiver_email or "@" not in receiver_email:
+            return "Please include a valid recipient email address."
+        msg = f"Subject: {subject}\n\n{message}"
+        if obj.send_mail(sender_email, sender_password, receiver_email, msg):
+            return f"Email sent to {receiver_email}."
+        return "I could not send the email. Check your Gmail app password and account security settings."
 
     if command.startswith("calculate ") or command.startswith("what is ") or command.startswith("who is "):
         return computational_intelligence(command)
+
+    if command.startswith("ask ") or command.startswith("ai "):
+        prompt = re.sub(r"^(ask|ai)\s+", "", command, flags=re.IGNORECASE).strip()
+        if not prompt:
+            return "Tell me what to ask the AI assistant."
+        return ai.ask(prompt)
 
     if "make a note" in command or "write this down" in command or "remember this" in command:
         note_text = re.sub(r"^(make a note|write this down|remember this)\s*", "", command).strip()
@@ -206,7 +234,7 @@ def process_command(command):
     if "goodbye" in command or "offline" in command or command == "bye":
         return "Goodbye. Jarvis is going offline."
 
-    return "I did not recognize that command yet."
+    return ai.ask(command)
 
 
 class JarvisApp(tk.Tk):
@@ -304,6 +332,7 @@ class JarvisApp(tk.Tk):
             ("Search Google", "search google for "),
             ("Open website", "open "),
             ("Weather", "weather "),
+            ("Ask AI", "ask "),
             ("Note", "make a note "),
         ]
         for label, command in shortcuts:

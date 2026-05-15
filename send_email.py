@@ -3,6 +3,7 @@ import smtplib
 
 def mail(sender_email, sender_password, receiver_email, msg):
     try:
+        sender_password = sender_password.replace(" ", "")
         mail = smtplib.SMTP('smtp.gmail.com', 587)
         mail.ehlo()
         mail.starttls()

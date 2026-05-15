@@ -11,3 +11,6 @@ google-auth-oauthlib>=1.0
 google-auth-httplib2>=0.2
 SpeechRecognition>=3.10
 PyAutoGUI>=0.9
+standard-aifc>=3.13
+audioop-lts>=0.2
+sounddevice>=0.5

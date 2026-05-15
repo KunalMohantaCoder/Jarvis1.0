@@ -11,3 +11,4 @@ credentials.json
 *.png
 *.mp4
 *dbs.txt
+memory.py
