@@ -1,19 +1,25 @@
+import xml.etree.ElementTree as ET
+
 import requests
-import json
 
 
 
 def get_news():
-    url = 'http://newsapi.org/v2/top-headlines?sources=the-times-of-india&apiKey=ae5ccbe2006a4debbe6424d7e4b569ec'
-    news = requests.get(url).text
-    news_dict = json.loads(news)
-    articles = news_dict['articles']
     try:
-
+        response = requests.get(getNewsUrl(), timeout=10)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        articles = []
+        for item in root.findall("./channel/item")[:10]:
+            title = item.findtext("title", default="").strip()
+            link = item.findtext("link", default="").strip()
+            if title:
+                articles.append({"title": title, "url": link})
         return articles
-    except:
+    except Exception as exc:
+        print(exc)
         return False
 
 
 def getNewsUrl():
-    return 'http://newsapi.org/v2/top-headlines?sources=the-times-of-india&apiKey=ae5ccbe2006a4debbe6424d7e4b569ec'
+    return 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms'

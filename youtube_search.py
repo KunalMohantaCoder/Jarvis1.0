@@ -1,22 +1,17 @@
-import webbrowser, urllib, re
+import webbrowser, re
 import urllib.parse
 import urllib.request
 
-domain = input("Enter the song name: ")
-song = urllib.parse.urlencode({"search_query" : domain})
-print("Song" + song)
+def play_on_youtube(query):
+    song = urllib.parse.urlencode({"search_query": query})
+    result = urllib.request.urlopen("http://www.youtube.com/results?" + song)
+    search_results = re.findall(r'href=\"\/watch\?v=(.{11})', result.read().decode())
+    if not search_results:
+        return False
+    url = "http://www.youtube.com/watch?v=" + search_results[0]
+    webbrowser.open_new(url)
+    return url
 
-# fetch the ?v=query_string
-result = urllib.request.urlopen("http://www.youtube.com/results?" + song)
-print(result)
-
-# make the url of the first result song
-search_results = re.findall(r'href=\"\/watch\?v=(.{4})', result.read().decode())
-print(search_results)
-
-# make the final url of song selects the very first result from youtube result
-url = "http://www.youtube.com/watch?v="+str(search_results)
-
-# play the song using webBrowser module which opens the browser 
-# webbrowser.open(url, new = 1)
-webbrowser.open_new(url)
+if __name__ == "__main__":
+    domain = input("Enter the song name: ")
+    play_on_youtube(domain)

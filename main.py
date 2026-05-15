@@ -1,471 +1,301 @@
-from Jarvis import JarvisAssistant
-import re
+import datetime
 import os
 import random
-import pprint
-import datetime
-import requests
+import re
 import sys
-import urllib.parse  
-import pyjokes
-import time
-import pyautogui
-import pywhatkit
-import wolframalpha
-from PIL import Image
-from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import QTimer, QTime, QDate, Qt
-from PyQt5.QtGui import QMovie
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from PyQt5.uic import loadUiType
-from Jarvis.features.gui import Ui_MainWindow
-from Jarvis.config import config
+import threading
+import tkinter as tk
+from tkinter import scrolledtext
+import urllib.parse
+import webbrowser
+
+import requests
+
+from __init__ import JarvisAssistant
+import config
+
 
 obj = JarvisAssistant()
 
-# ================================ MEMORY ===========================================================================================================
-
-GREETINGS = ["hello jarvis", "jarvis", "wake up jarvis", "you there jarvis", "time to work jarvis", "hey jarvis",
-             "ok jarvis", "are you there"]
-GREETINGS_RES = ["always there for you sir", "i am ready sir",
-                 "your wish my command", "how can i help you sir?", "i am online and ready sir"]
+GREETINGS = {
+    "hello jarvis",
+    "jarvis",
+    "wake up jarvis",
+    "you there jarvis",
+    "time to work jarvis",
+    "hey jarvis",
+    "ok jarvis",
+    "are you there",
+}
+GREETINGS_RES = [
+    "Always there for you.",
+    "I am ready.",
+    "Your wish is my command.",
+    "How can I help?",
+    "I am online and ready.",
+]
 
 EMAIL_DIC = {
-    'myself': 'atharvaaingle@gmail.com',
-    'my official email': 'atharvaaingle@gmail.com',
-    'my second email': 'atharvaaingle@gmail.com',
-    'my official mail': 'atharvaaingle@gmail.com',
-    'my second mail': 'atharvaaingle@gmail.com'
+    "myself": getattr(config, "email", ""),
+    "my official email": getattr(config, "email", ""),
+    "my second email": getattr(config, "email", ""),
+    "my official mail": getattr(config, "email", ""),
+    "my second mail": getattr(config, "email", ""),
 }
-
-CALENDAR_STRS = ["what do i have", "do i have plans", "am i busy"]
-# =======================================================================================================================================================
 
 
 def speak(text):
     obj.tts(text)
 
 
-app_id = config.wolframalpha_id
+def _config_value(name):
+    value = getattr(config, name, "")
+    if not value or str(value).startswith("<"):
+        return None
+    return value
 
 
 def computational_intelligence(question):
-    try:
-        client = wolframalpha.Client(app_id)
-        answer = client.query(question)
-        answer = next(answer.results).text
-        print(answer)
-        return answer
-    except:
-        speak("Sorry sir I couldn't fetch your question's answer. Please try again ")
-        return None
-    
-def startup():
-    speak("Initializing Jarvis")
-    speak("Starting all systems applications")
-    speak("Installing and checking all drivers")
-    speak("Caliberating and examining all the core processors")
-    speak("Checking the internet connection")
-    speak("Wait a moment sir")
-    speak("All drivers are up and running")
-    speak("All systems have been activated")
-    speak("Now I am online")
-    hour = int(datetime.datetime.now().hour)
-    if hour>=0 and hour<=12:
-        speak("Good Morning")
-    elif hour>12 and hour<18:
-        speak("Good afternoon")
-    else:
-        speak("Good evening")
-    c_time = obj.tell_time()
-    speak(f"Currently it is {c_time}")
-    speak("I am Jarvis. Online and ready sir. Please tell me how may I help you")
-    
+    app_id = _config_value("wolframalpha_id")
+    if app_id:
+        try:
+            import wolframalpha
+
+            client = wolframalpha.Client(app_id)
+            answer = client.query(question)
+            return next(answer.results).text
+        except Exception as exc:
+            return f"I could not fetch a WolframAlpha answer: {exc}"
+
+    expression = re.sub(r"^(calculate|what is)\s+", "", question).strip()
+    local_answer = obj.calculate_locally(expression)
+    if local_answer is not None:
+        return local_answer
+    return "WolframAlpha needs an app id in config.py for that question."
 
 
-
-def wish():
-    hour = int(datetime.datetime.now().hour)
-    if hour>=0 and hour<=12:
-        speak("Good Morning")
-    elif hour>12 and hour<18:
-        speak("Good afternoon")
-    else:
-        speak("Good evening")
-    c_time = obj.tell_time()
-    speak(f"Currently it is {c_time}")
-    speak("I am Jarvis. Online and ready sir. Please tell me how may I help you")
-# if __name__ == "__main__":
+def startup_message():
+    now = obj.tell_time()
+    return f"{obj.greeting()}. I am Jarvis, online and ready. Current time is {now}."
 
 
-class MainThread(QThread):
-    def __init__(self, use_mic=False):
-        super(MainThread, self).__init__()
-        self.use_mic = use_mic
+def process_command(command):
+    command = command.strip().lower()
+    if not command:
+        return "Please enter a command."
 
-    def run(self):
-        self.TaskExecution()
+    if command in GREETINGS:
+        return random.choice(GREETINGS_RES)
 
-    def TaskExecution(self):
-        startup()
-        wish()
+    if "date" in command:
+        return obj.tell_me_date()
 
-        while True:
-            command = obj.get_input(use_mic=self.use_mic)
-            if not command:  # Skip if command is False
-                continue
-                
-            if re.search('date', command):
-                date = obj.tell_me_date()
-                print(date)
-                speak(date)
+    if "time" in command:
+        return f"The time is {obj.tell_time()}."
 
-            elif "time" in command:
-                time_c = obj.tell_time()
-                print(time_c)
-                speak(f"Sir the time is {time_c}")
+    if command.startswith("launch "):
+        apps = {
+            "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            "notepad": "notepad.exe",
+            "calculator": "calc.exe",
+        }
+        app = command.replace("launch ", "", 1).strip()
+        path = apps.get(app, app)
+        if obj.launch_any_app(path):
+            return f"Launching {app}."
+        return f"I could not launch {app}. Add its full path or check that it is installed."
 
-            elif re.search('launch', command):
-                dict_app = {
-                    'chrome': 'C:/Program Files/Google/Chrome/Application/chrome'
-                }
+    if command.startswith("open "):
+        domain = command.replace("open ", "", 1).strip()
+        opened = obj.website_opener(domain)
+        return f"Opening {opened}." if opened else f"I could not open {domain}."
 
-                app = command.split(' ', 1)[1]
-                path = dict_app.get(app)
+    if "weather" in command:
+        city = command.split()[-1]
+        return obj.weather(city)
 
-                if path is None:
-                    speak('Application path not found')
-                    print('Application path not found')
+    if command.startswith("tell me about "):
+        topic = command.replace("tell me about ", "", 1).strip()
+        return obj.tell_me(topic) or "I could not find that topic."
 
-                else:
-                    speak('Launching: ' + app + 'for you sir!')
-                    obj.launch_any_app(path_of_app=path)
+    if "news" in command or "headlines" in command:
+        articles = obj.news()
+        if not articles:
+            return "I could not fetch the news right now."
+        titles = [article.get("title", "") for article in articles[:5] if article.get("title")]
+        return "Top headlines:\n" + "\n".join(f"- {title}" for title in titles)
 
-            elif command in GREETINGS:
-                speak(random.choice(GREETINGS_RES))
+    if "search google for" in command:
+        url = obj.search_anything_google(command)
+        return f"Searching Google: {url}"
 
-            elif re.search('open', command):
-                domain = command.split(' ')[-1]
-                open_result = obj.website_opener(domain)
-                speak(f'Alright sir !! Opening {domain}')
-                print(open_result)
+    if command.startswith("youtube ") or command.startswith("play "):
+        query = re.sub(r"^(youtube|play)\s+", "", command).strip()
+        url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)
+        webbrowser.open(url)
+        return f"Opening YouTube results for {query}."
 
-            elif re.search('weather', command):
-                city = command.split(' ')[-1]
-                weather_res = obj.weather(city=city)
-                print(weather_res)
-                speak(weather_res)
+    if "email" in command or "send email" in command:
+        sender_email = _config_value("email")
+        sender_password = _config_value("email_password")
+        if not sender_email or not sender_password:
+            return "Email needs your address and app password in config.py."
+        return "Email is configured. Use the voice flow for recipient, subject, and message."
 
-            elif re.search('tell me about', command):
-                topic = command.split(' ')[-1]
-                if topic:
-                    wiki_res = obj.tell_me(topic)
-                    print(wiki_res)
-                    speak(wiki_res)
-                else:
-                    speak(
-                        "Sorry sir. I couldn't load your query from my database. Please try again")
+    if command.startswith("calculate ") or command.startswith("what is ") or command.startswith("who is "):
+        return computational_intelligence(command)
 
-            elif "buzzing" in command or "news" in command or "headlines" in command:
-                news_res = obj.news()
-                speak('Source: The Times Of India')
-                speak('Todays Headlines are..')
-                for index, articles in enumerate(news_res):
-                    pprint.pprint(articles['title'])
-                    speak(articles['title'])
-                    if index == len(news_res)-2:
-                        break
-                speak('These were the top headlines, Have a nice day Sir!!..')
+    if "make a note" in command or "write this down" in command or "remember this" in command:
+        note_text = re.sub(r"^(make a note|write this down|remember this)\s*", "", command).strip()
+        if not note_text:
+            return "Tell me what to write after the note command."
+        file_name = obj.take_note(note_text)
+        return f"I made a note: {file_name}"
 
-            elif 'search google for' in command:
-                obj.search_anything_google(command)
-            
-            elif "play music" in command or "hit some music" in command:
-                music_dir = "F://Songs//Imagine_Dragons"
-                songs = os.listdir(music_dir)
-                for song in songs:
-                    os.startfile(os.path.join(music_dir, song))
+    if "joke" in command:
+        try:
+            import pyjokes
 
-            elif 'youtube' in command:
-                video = command.split(' ')[1]
-                speak(f"Okay sir, playing {video} on youtube")
-                pywhatkit.playonyt(video)
+            return pyjokes.get_joke()
+        except Exception:
+            return "Jokes need the pyjokes package installed."
 
-            elif "email" in command or "send email" in command:
-                sender_email = config.email
-                sender_password = config.email_password
+    if "system" in command:
+        try:
+            return obj.system_info()
+        except Exception as exc:
+            return f"System stats need psutil installed: {exc}"
 
-                try:
-                    speak("Whom do you want to email sir ?")
-                    recipient = obj.mic_input()
-                    receiver_email = EMAIL_DIC.get(recipient)
-                    if receiver_email:
+    if command.startswith("where is "):
+        place = command.replace("where is ", "", 1).strip()
+        try:
+            _current_loc, target_loc, distance = obj.location(place)
+            city = target_loc.get("city", "")
+            state = target_loc.get("state", "")
+            country = target_loc.get("country", "")
+            if city:
+                return f"{place} is in {state}, {country}. It is about {distance} km away."
+            return f"{place} is in {country}. It is about {distance} km away."
+        except Exception as exc:
+            return f"I could not find that location: {exc}"
 
-                        speak("What is the subject sir ?")
-                        subject = obj.mic_input()
-                        speak("What should I say?")
-                        message = obj.mic_input()
-                        msg = 'Subject: {}\n\n{}'.format(subject, message)
-                        obj.send_mail(sender_email, sender_password,
-                                      receiver_email, msg)
-                        speak("Email has been successfully sent")
-                        time.sleep(2)
+    if "ip address" in command:
+        try:
+            ip = requests.get("https://api.ipify.org", timeout=10).text
+            return f"Your IP address is {ip}."
+        except Exception as exc:
+            return f"I could not fetch the IP address: {exc}"
 
-                    else:
-                        speak(
-                            "I coudn't find the requested person's email in my database. Please try again with a different name")
+    if "where i am" in command or "current location" in command or "where am i" in command:
+        try:
+            city, state, country = obj.my_location()
+            return f"You are currently in {city}, {state}, {country}."
+        except Exception as exc:
+            return f"I could not fetch your current location: {exc}"
 
-                except:
-                    speak("Sorry sir. Couldn't send your mail. Please try again")
+    if "take screenshot" in command or "capture the screen" in command:
+        try:
+            import pyautogui
 
-            elif "calculate" in command:
-                question = command
-                answer = computational_intelligence(question)
-                speak(answer)
-            
-            elif "what is" in command or "who is" in command:
-                question = command
-                answer = computational_intelligence(question)
-                speak(answer)
+            file_name = f"screenshot-{datetime.datetime.now():%Y%m%d-%H%M%S}.png"
+            pyautogui.screenshot().save(file_name)
+            return f"Screenshot saved as {file_name}."
+        except Exception as exc:
+            return f"Screenshots need pyautogui working correctly: {exc}"
 
-            elif "what do i have" in command or "do i have plans" or "am i busy" in command:
-                obj.google_calendar_events(command)
+    if "goodbye" in command or "offline" in command or command == "bye":
+        return "Goodbye. Jarvis is going offline."
 
-            if "make a note" in command or "write this down" in command or "remember this" in command:
-                speak("What would you like me to write down?")
-                note_text = obj.mic_input()
-                obj.take_note(note_text)
-                speak("I've made a note of that")
-
-            elif "close the note" in command or "close notepad" in command:
-                speak("Okay sir, closing notepad")
-                os.system("taskkill /f /im notepad++.exe")
-
-            if "joke" in command:
-                joke = pyjokes.get_joke()
-                print(joke)
-                speak(joke)
-
-            elif "system" in command:
-                sys_info = obj.system_info()
-                print(sys_info)
-                speak(sys_info)
-
-            elif "where is" in command:
-                place = command.split('where is ', 1)[1]
-                current_loc, target_loc, distance = obj.location(place)
-                city = target_loc.get('city', '')
-                state = target_loc.get('state', '')
-                country = target_loc.get('country', '')
-                time.sleep(1)
-                try:
-
-                    if city:
-                        res = f"{place} is in {state} state and country {country}. It is {distance} km away from your current location"
-                        print(res)
-                        speak(res)
-
-                    else:
-                        res = f"{state} is a state in {country}. It is {distance} km away from your current location"
-                        print(res)
-                        speak(res)
-
-                except:
-                    res = "Sorry sir, I couldn't get the co-ordinates of the location you requested. Please try again"
-                    speak(res)
-
-            elif "ip address" in command:
-                ip = requests.get('https://api.ipify.org').text
-                print(ip)
-                speak(f"Your ip address is {ip}")
-
-            elif "switch the window" in command or "switch window" in command:
-                speak("Okay sir, Switching the window")
-                pyautogui.keyDown("alt")
-                pyautogui.press("tab")
-                time.sleep(1)
-                pyautogui.keyUp("alt")
-
-            elif "where i am" in command or "current location" in command or "where am i" in command:
-                try:
-                    city, state, country = obj.my_location()
-                    print(city, state, country)
-                    speak(
-                        f"You are currently in {city} city which is in {state} state and country {country}")
-                except Exception as e:
-                    speak(
-                        "Sorry sir, I coundn't fetch your current location. Please try again")
-
-            elif "take screenshot" in command or "take a screenshot" in command or "capture the screen" in command:
-                speak("By what name do you want to save the screenshot?")
-                name = obj.mic_input()
-                speak("Alright sir, taking the screenshot")
-                img = pyautogui.screenshot()
-                name = f"{name}.png"
-                img.save(name)
-                speak("The screenshot has been succesfully captured")
-
-            elif "show me the screenshot" in command:
-                try:
-                    img = Image.open('D://JARVIS//JARVIS_2.0//' + name)
-                    img.show(img)
-                    speak("Here it is sir")
-                    time.sleep(2)
-
-                except IOError:
-                    speak("Sorry sir, I am unable to display the screenshot")
-
-            elif "hide all files" in command or "hide this folder" in command:
-                os.system("attrib +h /s /d")
-                speak("Sir, all the files in this folder are now hidden")
-
-            elif "visible" in command or "make files visible" in command:
-                os.system("attrib -h /s /d")
-                speak("Sir, all the files in this folder are now visible to everyone. I hope you are taking this decision in your own peace")
-
-            # if "calculate" in command or "what is" in command:
-            #     query = command
-            #     answer = computational_intelligence(query)
-            #     speak(answer)
-
-            
-
-            elif "goodbye" in command or "offline" in command or "bye" in command:
-                speak("Alright sir, going offline. It was nice working with you")
-                sys.exit()
+    return "I did not recognize that command yet."
 
 
-# GUI class starts here
-class Main(QMainWindow):
+class JarvisApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
-        
-        # Initialize state
-        self.thread = None
-        self.is_running = False
-        
-        # Connect button signals
-        self.ui.pushButton.clicked.connect(self.startVoiceAssistant)  # Voice button
-        self.ui.textButton.clicked.connect(self.handleTextInput)      # Send button
-        self.ui.pushButton_2.clicked.connect(self.exitApplication)    # Exit button
-        self.ui.textInput.returnPressed.connect(self.handleTextInput) # Enter key in text input
-        
-        # Initialize UI
-        self.setupUI()
-        
-    def setupUI(self):
-        # Set up the animated background
-        self.ui.movie = QtGui.QMovie("Jarvis/utils/images/live_wallpaper.gif")
-        self.ui.label.setMovie(self.ui.movie)
-        self.ui.movie.start()
-        
-        # Set up the initiating animation
-        self.ui.init_movie = QtGui.QMovie("Jarvis/utils/images/initiating.gif")
-        self.ui.label_2.setMovie(self.ui.init_movie)
-        self.ui.init_movie.start()
-        
-        # Start time display
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.showTime)
-        self.timer.start(1000)
-        
-        # Enable text input and buttons
-        self.ui.textInput.setEnabled(True)
-        self.ui.textButton.setEnabled(True)
-        self.ui.pushButton.setEnabled(True)
-    
-    def updateStatus(self, message, duration=2000):
-        """Update status text with auto-clear"""
-        self.ui.statusText.setText(message)
-        QTimer.singleShot(duration, lambda: self.ui.statusText.clear())
+        self.title("JARVIS")
+        self.geometry("900x620")
+        self.minsize(720, 480)
+        self.configure(bg="#06090d")
 
-    def startVoiceAssistant(self):
-        """Handle Voice Assistant button click"""
-        if not self.is_running:
-            self.is_running = True
-            self.thread = MainThread(use_mic=True)
-            self.thread.start()
-            # Visual feedback
-            self.ui.pushButton.setStyleSheet(self.ui.pushButton.styleSheet() + "background-color: #005577;")
-            self.updateStatus("🎤 Listening...")
-            speak("Voice assistant activated")
-        
-    def handleTextInput(self):
-        """Handle text input from either Send button or Enter key"""
-        text = self.ui.textInput.text().strip()
-        if text:
-            # Clear input and give visual feedback
-            self.ui.textInput.clear()
-            self.ui.textButton.setStyleSheet(self.ui.textButton.styleSheet() + "background-color: #006644;")
-            
-            # Update status
-            self.updateStatus(f"⌨️ Processing: {text}")
-            
-            # Process the command directly
-            self.processCommand(text)
-            
-            # Reset button style after brief delay
-            QTimer.singleShot(200, lambda: self.ui.textButton.setStyleSheet(self.ui.textButton.styleSheet()))
-            
-    def processCommand(self, text):
-        """Process a command string"""
-        # Store the command for the thread to use
-        command = text.lower()
-        print(f'Processing command: {command}')
-        
-        # Create and start thread if needed
-        if not self.thread or not self.thread.isRunning():
-            self.thread = MainThread(use_mic=False)
-            # Store the command in a way that doesn't conflict with the text_input method
-            obj._last_text_input = command
-            self.thread.start()
-            self.is_running = True
-    
-    def exitApplication(self):
-        """Handle Exit button click with proper cleanup"""
-        # Stop any running threads
-        if self.thread and self.thread.isRunning():
-            speak("Shutting down")
-            self.thread.terminate()
-            self.thread.wait()
-        
-        # Stop timers and animations
-        self.timer.stop()
-        self.ui.movie.stop()
-        self.ui.init_movie.stop()
-        
-        # Close the application
-        self.close()
-        sys.exit()
+        self.output = scrolledtext.ScrolledText(
+            self,
+            bg="#08111a",
+            fg="#eaf6ff",
+            insertbackground="#eaf6ff",
+            font=("Segoe UI", 11),
+            relief=tk.FLAT,
+            wrap=tk.WORD,
+        )
+        self.output.pack(fill=tk.BOTH, expand=True, padx=16, pady=(16, 8))
 
-    def showTime(self):
-        """Update the date and time displays"""
-        current_time = QTime.currentTime()
-        current_date = QDate.currentDate()
-        
-        # Format time with modern display
-        label_time = current_time.toString('hh:mm:ss')
-        self.ui.textBrowser_2.setText(f"🕒 {label_time}")
-        
-        # Format date with modern display
-        label_date = current_date.toString('dddd, MMMM d, yyyy')
-        self.ui.textBrowser.setText(f"📅 {label_date}")
+        controls = tk.Frame(self, bg="#06090d")
+        controls.pack(fill=tk.X, padx=16, pady=(0, 16))
+
+        self.entry = tk.Entry(
+            controls,
+            bg="#101d29",
+            fg="#ffffff",
+            insertbackground="#ffffff",
+            font=("Segoe UI", 12),
+            relief=tk.FLAT,
+        )
+        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=10)
+        self.entry.bind("<Return>", lambda _event: self.handle_text())
+
+        send = tk.Button(controls, text="Send", command=self.handle_text, width=10)
+        send.pack(side=tk.LEFT, padx=(8, 0), ipady=6)
+
+        voice = tk.Button(controls, text="Voice", command=self.handle_voice, width=10)
+        voice.pack(side=tk.LEFT, padx=(8, 0), ipady=6)
+
+        self.write("Jarvis", startup_message())
+
+    def write(self, speaker, text):
+        self.output.insert(tk.END, f"{speaker}: {text}\n\n")
+        self.output.see(tk.END)
+
+    def handle_text(self):
+        command = self.entry.get().strip()
+        self.entry.delete(0, tk.END)
+        if not command:
+            return
+        self.write("You", command)
+        response = process_command(command)
+        self.write("Jarvis", response)
+        threading.Thread(target=speak, args=(response,), daemon=True).start()
+        if response.startswith("Goodbye"):
+            self.after(800, self.destroy)
+
+    def handle_voice(self):
+        def worker():
+            command = obj.mic_input()
+            if not command:
+                self.write("Jarvis", "Voice input is not available or I could not hear a command.")
+                return
+            self.write("You", command)
+            response = process_command(command)
+            self.write("Jarvis", response)
+            speak(response)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+
+def run_cli():
+    print(startup_message())
+    while True:
+        try:
+            command = input("You: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        response = process_command(command)
+        print(f"Jarvis: {response}")
+        if response.startswith("Goodbye"):
+            break
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    
-    # Set application-wide style
-    app.setStyle("Fusion")
-    
-    # Create and show main window
-    jarvis = Main()
-    jarvis.setWindowTitle("JARVIS 2.0")
-    jarvis.show()
-    
-    # Start event loop
-    sys.exit(app.exec_())
+    if "--cli" in sys.argv or not os.environ.get("DISPLAY", "windows"):
+        run_cli()
+    else:
+        JarvisApp().mainloop()

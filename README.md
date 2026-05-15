@@ -48,19 +48,21 @@ To run this program you will require a bunch of API keys. Register your API key 
 ## Installation
 
 - First clone the repo
-- Make a config.py file and include the following in it:
-    ```weather_api_key = "<your_api_key>"
+- Update `config.py` with any API keys you want to use:
+    ```
+    weather_api_key = "<your_openweathermap_api_key>"
     email = "<your_email>"
-    email_password = "<your_email_password>"
-    wolframalpha_id = "<your_wolframalpha_id>"
-- Copy the config.py file in Jarvis>config folder
+    email_password = "<your_email_app_password>"
+    wolframalpha_id = "<your_wolframalpha_app_id>"
+    ```
 - Make a new python environment
-    If you are using anaconda just type ```conda create -n jarvis python==3.8.5 ``` in anaconda prompt
+    If you are using anaconda just type ```conda create -n jarvis python==3.11 ``` in anaconda prompt
 - To activate the environment ``` conda activate jarvis ```
 - Navigate to the directory of your project
 - Install all the requirements by just hitting ``` pip install -r requirements.txt ```
-- Install PyAudio from wheel file by following instructions given [here](https://stackoverflow.com/a/55630212)
-- Run the program by ``` python main.py ```
+- Run the desktop app with ``` python main.py ```
+- Run the command-line version with ``` python main.py --cli ```
+- Voice input, screenshots, weather, email, WolframAlpha, and Google Calendar are optional integrations. If a package, API key, microphone, or credential file is missing, Jarvis now opens normally and explains what that feature needs.
 - Enjoy !!!!
 
 ## Code Structure

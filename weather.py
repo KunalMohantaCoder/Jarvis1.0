@@ -1,5 +1,6 @@
 import requests
-from Jarvis.config import config
+
+import config
 
 
 
@@ -9,17 +10,19 @@ def fetch_weather(city):
     :param city: City
     :return: weather
     """
-    api_key = config.weather_api_key
+    api_key = getattr(config, "weather_api_key", "")
+    if not api_key or api_key.startswith("<"):
+        return "Weather needs an OpenWeatherMap API key in config.py."
     units_format = "&units=metric"
 
     base_url = "http://api.openweathermap.org/data/2.5/weather?q="
     complete_url = base_url + city + "&appid=" + api_key + units_format
 
-    response = requests.get(complete_url)
+    response = requests.get(complete_url, timeout=10)
 
     city_weather_data = response.json()
 
-    if city_weather_data["cod"] != "404":
+    if str(city_weather_data.get("cod")) != "404":
         main_data = city_weather_data["main"]
         weather_description_data = city_weather_data["weather"][0]
         weather_description = weather_description_data["description"]
